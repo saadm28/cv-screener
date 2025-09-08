@@ -26,8 +26,7 @@ KSEYE_LIGHT = "#f8f9fa"
 # Custom CSS with KSEYE branding
 st.markdown(f"""
 <style>
-    /* Import Google Fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Import Google Fonts */                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     /* Global Styles */
     * {{
@@ -400,16 +399,29 @@ elif page == "CV Analyzer":
             help="You can upload individual CV files or a ZIP containing multiple CVs"
         )
         
-        # Full-width button styling
+        # Full-width button styling with higher specificity
         st.markdown("""
         <style>
-        .stButton > button {
+        div[data-testid="stButton"] > button,
+        .stButton > button,
+        button[kind="primary"] {
             width: 100% !important;
             height: 50px !important;
             font-size: 16px !important;
             font-weight: 600 !important;
             border-radius: 8px !important;
             margin-top: 10px !important;
+            display: block !important;
+        }
+        
+        /* Fix expander display issues */
+        .streamlit-expanderHeader {
+            font-size: 14px !important;
+            font-weight: 500 !important;
+        }
+        
+        details[open] > summary {
+            margin-bottom: 10px !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -635,7 +647,7 @@ elif page == "CV Analyzer":
                     </style>
                     """, unsafe_allow_html=True)
                     
-                    tab1, tab2, tab3 = st.tabs(["🎯 Analysis", "� Experience", "🎓 Skills & Education"])
+                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])
                     
                     with tab1:
                         st.markdown('<div class="tab-content">', unsafe_allow_html=True)
