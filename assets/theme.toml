@@ -1,0 +1,5 @@
+[theme]
+primaryColor = "#0B1739"        # KSEYE-like deep navy (replace with exact hex if you have brand guide)
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F6F8FB"
+textColor = "#0B1739"
