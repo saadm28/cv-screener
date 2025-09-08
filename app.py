@@ -405,21 +405,21 @@ elif page == "CV Analyzer":
     # Analysis Section
     if analyze_button:
         if not job_title.strip():
-            st.error("⚠️ Please enter a job title")
+            st.error("Please enter a job title")
             st.stop()
         
         if not job_description.strip():
-            st.error("⚠️ Please enter a job description")
+            st.error("Please enter a job description")
             st.stop()
         
         if not uploaded_files:
-            st.error("⚠️ Please upload at least one CV")
+            st.error("Please upload at least one CV")
             st.stop()
         
         # Check OpenAI availability
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         if not openai_key:
-            st.error("⚠️ OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.")
+            st.error("OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.")
             st.stop()
 
         # Create a unique key for this analysis session
@@ -484,11 +484,8 @@ elif page == "CV Analyzer":
                         "total_candidates": len(candidates)
                     }
                     
-                    # Initialize pagination
-                    st.session_state.current_page = 1
-                    
                 except Exception as e:
-                    st.error(f"❌ An error occurred during analysis: {str(e)}")
+                    st.error("An error occurred during analysis: " + str(e))
                     st.exception(e)
                     st.stop()
         
@@ -506,22 +503,16 @@ elif page == "CV Analyzer":
         </div>
         """, unsafe_allow_html=True)
         
-        # Display ranked candidates with pagination
-        candidates_per_page = 10
-        total_pages = (len(scored_candidates) + candidates_per_page - 1) // candidates_per_page
+        # Display all candidates (up to 50 max for performance)
+        max_display = 50
+        display_candidates = scored_candidates[:max_display]
         
-        # Initialize session state for pagination
-        if 'current_page' not in st.session_state:
-            st.session_state.current_page = 1
+        if len(scored_candidates) > max_display:
+            st.info(f"Showing top {max_display} candidates out of {len(scored_candidates)} total candidates.")
         
-        # Calculate which candidates to show
-        start_idx = (st.session_state.current_page - 1) * candidates_per_page
-        end_idx = min(start_idx + candidates_per_page, len(scored_candidates))
-        current_candidates = scored_candidates[start_idx:end_idx]
-        
-        # Display candidates for current page
-        for i, (score, candidate) in enumerate(current_candidates):
-            rank = start_idx + i + 1
+        # Display all candidates
+        for i, (score, candidate) in enumerate(display_candidates):
+            rank = i + 1
             candidate_key = f"candidate_{rank}"
             
             # Initialize expanded state
@@ -669,7 +660,7 @@ elif page == "CV Analyzer":
                                 """, unsafe_allow_html=True)
                             st.markdown('</div>', unsafe_allow_html=True)
                         elif not highlights:
-                            st.info("📄 No detailed experience information extracted from CV")
+                            st.info("No detailed experience information extracted from CV")
                         
                         st.markdown('</div>', unsafe_allow_html=True)
                     
@@ -720,48 +711,5 @@ elif page == "CV Analyzer":
                 
                 # Close the main card div
                 st.markdown('</div>', unsafe_allow_html=True)
-        
-        # Bottom pagination with improved styling
-        if total_pages > 1:
-            st.markdown("<div style='margin-top: 40px;'></div>", unsafe_allow_html=True)
-            
-            # Create pagination container
-            st.markdown("""
-            <style>
-                .pagination-container {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    gap: 20px;
-                    padding: 20px 0;
-                    background: #f8fafc;
-                    border-radius: 10px;
-                    margin: 20px 0;
-                }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
-            
-            with col1:
-                if st.button("← Previous", disabled=st.session_state.current_page <= 1, 
-                           key="bottom_prev_btn", type="secondary"):
-                    st.session_state.current_page -= 1
-                    st.rerun()
-            
-            with col3:
-                st.markdown(f"""
-                <div class="pagination-container">
-                    <span style='color: #374151; font-size: 16px; font-weight: 600;'>
-                        Page {st.session_state.current_page} of {total_pages}
-                    </span>
-                </div>
-                """, unsafe_allow_html=True)
-            
-            with col5:
-                if st.button("Next →", disabled=st.session_state.current_page >= total_pages, 
-                           key="bottom_next_btn", type="secondary"):
-                    st.session_state.current_page += 1
-                    st.rerun()
         
         st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)
