@@ -400,6 +400,20 @@ elif page == "CV Analyzer":
             help="You can upload individual CV files or a ZIP containing multiple CVs"
         )
         
+        # Full-width button styling
+        st.markdown("""
+        <style>
+        .stButton > button {
+            width: 100% !important;
+            height: 50px !important;
+            font-size: 16px !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            margin-top: 10px !important;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
         analyze_button = st.button("Analyze Candidates", type="primary")
     
     # Analysis Section
