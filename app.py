@@ -26,8 +26,8 @@ KSEYE_LIGHT = "#f8f9fa"
 # Custom CSS with KSEYE branding
 st.markdown(f"""
 <style>
-                      tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"]) /* Import Google Fonts */
-    @import u                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])l('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     /* Global Styles */
     * {{
