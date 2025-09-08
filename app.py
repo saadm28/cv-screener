@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 from parsing.extractor import load_files_from_uploader
 from utils.text import clean_text
-from cv_analyzer import analyze_cv_with_openai, to_dict
+from cv_analyzer import analyze_cv_with_openai, to_dict, score_candidate_with_ai
 
 load_dotenv()
 
@@ -26,7 +26,7 @@ KSEYE_LIGHT = "#f8f9fa"
 # Custom CSS with KSEYE branding
 st.markdown(f"""
 <style>
-    /* Import Google Fonts */
+                      tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"]) /* Import Google Fonts */
     @import u                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])l('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     /* Global Styles */
@@ -464,15 +464,26 @@ elif page == "CV Analyzer":
                         st.error("❌ Could not analyze any CVs. Please check the file formats.")
                         st.stop()
                     
-                    # Calculate scores and rank candidates
+                    # Calculate scores using AI analysis and rank candidates
                     scored_candidates = []
-                    for candidate in candidates:
-                        # Simple scoring based on AI analysis (can be enhanced)
-                        base_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
-                        skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
-                        final_score = min(100, base_score + skill_bonus)
+                    
+                    progress_bar = st.progress(0)
+                    total_candidates_to_score = len(candidates)
+                    
+                    for i, candidate in enumerate(candidates):
+                        # Update progress
+                        progress_bar.progress((i + 1) / total_candidates_to_score)
                         
-                        scored_candidates.append((final_score, candidate))
+                        # Get AI-powered score and reasoning
+                        score, reasoning = score_candidate_with_ai(candidate, job_title, job_description)
+                        
+                        # Store score with reasoning for display
+                        candidate.ai_score = score
+                        candidate.ai_reasoning = reasoning
+                        
+                        scored_candidates.append((score, candidate))
+                    
+                    progress_bar.empty()
                     
                     # Sort by score (highest first)
                     scored_candidates.sort(key=lambda x: x[0], reverse=True)
@@ -615,19 +626,36 @@ elif page == "CV Analyzer":
                     with tab1:
                         st.markdown('<div class="tab-content">', unsafe_allow_html=True)
                         
-                        # Candidate summary (no scores in dropdown)
+                        # Candidate summary
                         st.markdown('<div class="detail-section">', unsafe_allow_html=True)
                         st.markdown('<div class="detail-header">Candidate Summary</div>', unsafe_allow_html=True)
                         st.markdown(f'<div style="color: #374151; line-height: 1.7; font-size: 15px;">{candidate.summary}</div>', unsafe_allow_html=True)
                         st.markdown('</div>', unsafe_allow_html=True)
                         
-                        # Assessment notes
-                        if candidate.confidence_notes:
+                        # Combined AI Assessment (scoring + notes)
+                        ai_reasoning = getattr(candidate, 'ai_reasoning', '')
+                        ai_score = getattr(candidate, 'ai_score', 0)
+                        confidence_notes = candidate.confidence_notes if candidate.confidence_notes else ''
+                        
+                        if ai_reasoning or confidence_notes:
                             st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">AI Assessment Notes</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="detail-header">AI Assessment</div>', unsafe_allow_html=True)
+                            
+                            # Build combined assessment content
+                            assessment_content = ""
+                            
+                            if ai_reasoning:
+                                assessment_content += f"<strong>Score: {ai_score:.0f}%</strong><br><br>"
+                                assessment_content += f"<strong>Evaluation:</strong><br>{ai_reasoning}"
+                            
+                            if confidence_notes:
+                                if ai_reasoning:
+                                    assessment_content += "<br><br>"
+                                assessment_content += f"<strong>Additional Notes:</strong><br>{confidence_notes}"
+                            
                             st.markdown(f"""
-                            <div style="padding: 16px; background: #f8fafc; border-radius: 8px; color: #374151; border-left: 4px solid {KSEYE_RED}; line-height: 1.6;">
-                                {candidate.confidence_notes}
+                            <div style="padding: 16px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%); border-radius: 8px; color: #374151; border-left: 4px solid {KSEYE_RED}; line-height: 1.6;">
+                                {assessment_content}
                             </div>
                             """, unsafe_allow_html=True)
                             st.markdown('</div>', unsafe_allow_html=True)

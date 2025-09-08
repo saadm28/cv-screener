@@ -234,3 +234,132 @@ def safe_list(value: Any) -> List[str]:
     elif value is not None:
         return [str(value)]
     return []
+
+
+def score_candidate_with_ai(candidate: CVAnalysis, job_title: str, job_description: str) -> tuple[float, str]:
+    """
+    Score candidate using AI analysis against job requirements
+    Returns: (score 0-100, reasoning)
+    """
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    
+    if not openai_key:
+        # Fallback to simple scoring if no API key
+        base_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
+        skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
+        score = min(100, base_score + skill_bonus)
+        return score, "Fallback scoring used (no API key available)"
+    
+    try:
+        client = OpenAI(api_key=openai_key)
+        
+        # Prepare candidate summary for scoring
+        candidate_summary = f"""
+Candidate: {candidate.candidate_name}
+Current Title: {candidate.current_title}
+Total Experience: {candidate.total_years} years
+Relevant Experience: {candidate.relevant_years} years
+Summary: {candidate.summary}
+Key Skills: {', '.join(candidate.must_have_skills + candidate.nice_to_have_skills)}
+Experience Highlights: {', '.join(candidate.experience_highlights)}
+Strengths: {', '.join(candidate.strengths)}
+"""
+        
+        scoring_prompt = f"""You are an expert recruiter evaluating candidates. Analyze this candidate against the job requirements and provide a comprehensive score.
+
+JOB REQUIREMENTS:
+Title: {job_title}
+Description: {job_description}
+
+CANDIDATE PROFILE:
+{candidate_summary}
+
+Evaluate the candidate on these criteria and provide a detailed scoring:
+
+1. RELEVANT EXPERIENCE MATCH (40% weight)
+   - How well does their experience align with job requirements?
+   - Quality and depth of relevant experience
+   - Career progression and growth
+
+2. REQUIRED SKILLS COVERAGE (30% weight)
+   - Coverage of must-have technical skills
+   - Proficiency level indicators
+   - Skill depth vs breadth
+
+3. NICE-TO-HAVE SKILLS (15% weight)
+   - Additional valuable skills mentioned
+   - Bonus qualifications
+
+4. EDUCATION & CERTIFICATIONS (10% weight)
+   - Relevant educational background
+   - Professional certifications
+   - Continuous learning indicators
+
+5. OVERALL FIT & POTENTIAL (5% weight)
+   - Cultural fit indicators
+   - Growth potential
+   - Communication skills evident in CV
+
+Provide a final score from 0-100 where:
+- 90-100: Exceptional match, top candidate
+- 80-89: Strong match, excellent candidate  
+- 70-79: Good match, solid candidate
+- 60-69: Moderate match, consider with reservations
+- 50-59: Weak match, likely not suitable
+- 0-49: Poor match, not recommended
+
+Return your response in this exact JSON format:
+{{
+    "score": 85,
+    "reasoning": "Strong candidate with 8+ years relevant experience in Python development. Excellent match for senior role requirements including microservices, AWS, and team leadership. Missing some nice-to-have skills like Kubernetes but overall very well-qualified.",
+    "experience_match": 88,
+    "skills_coverage": 82,
+    "nice_to_have": 70,
+    "education": 85,
+    "overall_fit": 90
+}}"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert recruiter with deep knowledge of technical roles and candidate evaluation. Provide honest, detailed, and consistent scoring."
+                },
+                {
+                    "role": "user",
+                    "content": scoring_prompt
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1000
+        )
+        
+        # Parse the JSON response
+        result_text = response.choices[0].message.content
+        
+        try:
+            result = json.loads(result_text)
+            score = float(result.get('score', 0))
+            reasoning = result.get('reasoning', 'No reasoning provided')
+            
+            # Ensure score is within valid range
+            score = max(0, min(100, score))
+            
+            return score, reasoning
+            
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails
+            print(f"Failed to parse AI scoring response: {result_text}")
+            fallback_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
+            skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
+            score = min(100, fallback_score + skill_bonus)
+            return score, "AI scoring failed, used fallback calculation"
+            
+    except Exception as e:
+        print(f"Error in AI scoring: {str(e)}")
+        # Fallback to simple scoring
+        base_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
+        skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
+        score = min(100, base_score + skill_bonus)
+        return score, f"AI scoring error, used fallback: {str(e)}"
