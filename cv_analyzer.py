@@ -236,10 +236,10 @@ def safe_list(value: Any) -> List[str]:
     return []
 
 
-def score_candidate_with_ai(candidate: CVAnalysis, job_title: str, job_description: str) -> tuple[float, str]:
+def score_candidate_with_ai(candidate: CVAnalysis, job_title: str, job_description: str) -> tuple[float, str, str]:
     """
     Score candidate using AI analysis against job requirements
-    Returns: (score 0-100, reasoning)
+    Returns: (score 0-100, reasoning, brief_summary)
     """
     openai_key = os.getenv("OPENAI_API_KEY", "").strip()
     
@@ -248,7 +248,8 @@ def score_candidate_with_ai(candidate: CVAnalysis, job_title: str, job_descripti
         base_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
         skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
         score = min(100, base_score + skill_bonus)
-        return score, "Fallback scoring used (no API key available)"
+        brief_summary = f"{candidate.current_title} with {candidate.relevant_years}y relevant experience. Skills: {', '.join(candidate.must_have_skills[:3])}."
+        return score, "Fallback scoring used (no API key available)", brief_summary
     
     try:
         client = OpenAI(api_key=openai_key)
@@ -312,12 +313,15 @@ Return your response in this exact JSON format:
 {{
     "score": 85,
     "reasoning": "Strong candidate with 8+ years relevant experience in Python development. Excellent match for senior role requirements including microservices, AWS, and team leadership. Missing some nice-to-have skills like Kubernetes but overall very well-qualified.",
+    "brief_summary": "Senior Python Developer with 8y experience, strong in microservices & AWS, excellent team leadership skills",
     "experience_match": 88,
     "skills_coverage": 82,
     "nice_to_have": 70,
     "education": 85,
     "overall_fit": 90
-}}"""
+}}
+
+The brief_summary should be 1-2 sentences maximum, highlighting the candidate's current role, key experience, and standout skills relevant to this position."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -342,11 +346,12 @@ Return your response in this exact JSON format:
             result = json.loads(result_text)
             score = float(result.get('score', 0))
             reasoning = result.get('reasoning', 'No reasoning provided')
+            brief_summary = result.get('brief_summary', f"{candidate.current_title} with {candidate.relevant_years}y experience")
             
             # Ensure score is within valid range
             score = max(0, min(100, score))
             
-            return score, reasoning
+            return score, reasoning, brief_summary
             
         except json.JSONDecodeError:
             # Fallback if JSON parsing fails
@@ -354,7 +359,8 @@ Return your response in this exact JSON format:
             fallback_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
             skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
             score = min(100, fallback_score + skill_bonus)
-            return score, "AI scoring failed, used fallback calculation"
+            brief_summary = f"{candidate.current_title} with {candidate.relevant_years}y relevant experience"
+            return score, "AI scoring failed, used fallback calculation", brief_summary
             
     except Exception as e:
         print(f"Error in AI scoring: {str(e)}")
@@ -362,4 +368,5 @@ Return your response in this exact JSON format:
         base_score = min(95, max(20, candidate.total_years * 8 + candidate.relevant_years * 12))
         skill_bonus = len(candidate.must_have_skills) * 3 + len(candidate.nice_to_have_skills) * 1.5
         score = min(100, base_score + skill_bonus)
-        return score, f"AI scoring error, used fallback: {str(e)}"
+        brief_summary = f"{candidate.current_title} with {candidate.relevant_years}y relevant experience"
+        return score, f"AI scoring error, used fallback: {str(e)}", brief_summary

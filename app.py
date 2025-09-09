@@ -500,12 +500,13 @@ elif page == "CV Analyzer":
                         # Update progress
                         progress_bar.progress((i + 1) / total_candidates_to_score)
                         
-                        # Get AI-powered score and reasoning
-                        score, reasoning = score_candidate_with_ai(candidate, job_title, job_description)
+                        # Get AI-powered score, reasoning, and brief summary
+                        score, reasoning, brief_summary = score_candidate_with_ai(candidate, job_title, job_description)
                         
-                        # Store score with reasoning for display
+                        # Store score with reasoning and summary for display
                         candidate.ai_score = score
                         candidate.ai_reasoning = reasoning
+                        candidate.brief_summary = brief_summary
                         
                         scored_candidates.append((score, candidate))
                     
@@ -547,223 +548,508 @@ elif page == "CV Analyzer":
         if len(scored_candidates) > max_display:
             st.info(f"Showing top {max_display} candidates out of {len(scored_candidates)} total candidates.")
         
-        # Display all candidates
+        # Create candidate summary table
+        candidate_data = []
         for i, (score, candidate) in enumerate(display_candidates):
             rank = i + 1
-            candidate_key = f"candidate_{rank}"
+            # Get brief summary - either from AI or create a fallback
+            brief_summary = getattr(candidate, 'brief_summary', f"{candidate.current_title} with {candidate.relevant_years}y relevant experience")
             
-            # Initialize expanded state
-            if f"{candidate_key}_expanded" not in st.session_state:
-                st.session_state[f"{candidate_key}_expanded"] = False
+            candidate_data.append({
+                "rank": rank,
+                "name": candidate.candidate_name,
+                "summary": brief_summary,
+                "score": score,
+                "candidate_obj": candidate
+            })
+        
+        st.markdown("### 📊 Candidate Rankings")
+        
+        # Custom modern table with click functionality
+        st.markdown("""
+        <style>
+            .modern-table {
+                background: white;
+                border-radius: 16px;
+                border: 1px solid #e5e7eb;
+                overflow: hidden;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+                margin: 20px 0;
+            }
+            .table-header {
+                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                border-bottom: 2px solid #e5e7eb;
+                padding: 0;
+            }
+            .table-header-cell {
+                padding: 20px 24px;
+                font-weight: 700;
+                font-size: 14px;
+                color: #374151;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border-right: 1px solid #e5e7eb;
+            }
+            .table-header-cell:last-child {
+                border-right: none;
+            }
+            .table-row {
+                border-bottom: 1px solid #f3f4f6;
+                transition: all 0.2s ease;
+                cursor: pointer;
+                padding: 0;
+            }
+            .table-row:hover {
+                background: #f8fafc;
+                transform: scale(1.001);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            .table-row:last-child {
+                border-bottom: none;
+            }
+            .table-cell {
+                padding: 20px 24px;
+                vertical-align: middle;
+                border-right: 1px solid #f3f4f6;
+                font-size: 15px;
+            }
+            .table-cell:last-child {
+                border-right: none;
+            }
+            .rank-cell {
+                width: 80px;
+                text-align: center;
+                font-weight: 700;
+                color: #6b7280;
+            }
+            .name-cell {
+                width: 200px;
+                font-weight: 600;
+                color: #1f2937;
+            }
+            .summary-cell {
+                color: #4b5563;
+                line-height: 1.6;
+                max-width: 400px;
+            }
+            .score-cell {
+                width: 120px;
+                text-align: center;
+            }
+            .score-badge {
+                display: inline-block;
+                padding: 8px 16px;
+                border-radius: 20px;
+                font-weight: 700;
+                font-size: 14px;
+                color: white;
+                background: linear-gradient(135deg, #e42c2c 0%, #c82333 100%);
+                box-shadow: 0 2px 4px rgba(228, 44, 44, 0.2);
+            }
             
-            # Candidate card with integrated details
-            with st.container():
-                st.markdown(f"""
-                <div style="border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin: 12px 0; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <span style="background: #f1f5f9; color: #334155; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 600;">#{rank}</span>
-                            <span style="font-size: 20px; font-weight: 600; color: #2c3e50;">{candidate.candidate_name}</span>
-                        </div>
-                        <div style="background: {KSEYE_RED}; color: white; padding: 10px 18px; border-radius: 25px; font-weight: bold; font-size: 16px;">{score:.0f}%</div>
+            /* Modal styles */
+            .modal-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(4px);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                animation: fadeIn 0.2s ease;
+            }
+            .modal-content {
+                background: white;
+                border-radius: 20px;
+                width: 90%;
+                max-width: 800px;
+                max-height: 90vh;
+                overflow-y: auto;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                animation: slideIn 0.3s ease;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes slideIn {
+                from { transform: translateY(-50px) scale(0.9); opacity: 0; }
+                to { transform: translateY(0) scale(1); opacity: 1; }
+            }
+            .modal-header {
+                background: linear-gradient(135deg, #e42c2c 0%, #c82333 100%);
+                color: white;
+                padding: 32px;
+                border-radius: 20px 20px 0 0;
+                position: relative;
+            }
+            .close-btn {
+                position: absolute;
+                top: 24px;
+                right: 24px;
+                background: rgba(255, 255, 255, 0.2);
+                border: none;
+                color: white;
+                font-size: 24px;
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s ease;
+            }
+            .close-btn:hover {
+                background: rgba(255, 255, 255, 0.3);
+                transform: scale(1.1);
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Create a clean DataFrame for display
+        display_data = []
+        for i, candidate_info in enumerate(candidate_data):
+            display_data.append({
+                "Rank": f"#{candidate_info['rank']}",
+                "Candidate": candidate_info['name'],
+                "Summary": candidate_info['summary'],
+                "Score": f"{candidate_info['score']:.0f}%"
+            })
+        
+        df = pd.DataFrame(display_data)
+        
+        # Enhanced table styling
+        st.markdown("""
+        <style>
+        .stDataFrame {
+            width: 100%;
+        }
+        .stDataFrame > div {
+            width: 100%;
+        }
+        .stDataFrame table {
+            width: 100% !important;
+            border-collapse: separate;
+            border-spacing: 0;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            background: white;
+        }
+        .stDataFrame th {
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            color: #1e293b;
+            font-weight: 700;
+            font-size: 14px;
+            padding: 16px 20px;
+            text-align: left;
+            border-bottom: 2px solid #e42c2c;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .stDataFrame td {
+            padding: 16px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #374151;
+            font-size: 14px;
+            line-height: 1.5;
+            transition: all 0.2s ease;
+        }
+        .stDataFrame tr:hover td {
+            background: linear-gradient(135deg, #fef2f2 0%, #fdf2f8 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(228, 44, 44, 0.1);
+        }
+        .stDataFrame td:first-child {
+            font-weight: 700;
+            color: #e42c2c;
+            width: 80px;
+            text-align: center;
+        }
+        .stDataFrame td:nth-child(2) {
+            font-weight: 600;
+            color: #1e293b;
+            width: 200px;
+        }
+        .stDataFrame td:nth-child(3) {
+            width: auto;
+            color: #4b5563;
+        }
+        .stDataFrame td:last-child {
+            font-weight: 700;
+            width: 100px;
+            text-align: center;
+        }
+        .stDataFrame td:last-child {
+            color: #e42c2c;
+        }
+        /* Remove default Streamlit styling */
+        .stDataFrame [data-testid="column"] {
+            width: 100%;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Display the enhanced dataframe
+        selected_rows = st.dataframe(
+            df,
+            use_container_width=True,
+            hide_index=True,
+            on_select="rerun",
+            selection_mode="single-row"
+        )
+        
+        # Show candidate details when selected
+        if selected_rows["selection"]["rows"]:
+            selected_idx = selected_rows["selection"]["rows"][0]
+            selected_candidate = candidate_data[selected_idx]
+            candidate = selected_candidate["candidate_obj"]
+            score = selected_candidate["score_value"]
+            
+            # Modal-style container with modern design
+            st.markdown(f"""
+            <div style="
+                background: white; 
+                border: 2px solid {KSEYE_RED}; 
+                border-radius: 16px; 
+                padding: 0; 
+                margin: 30px 0; 
+                box-shadow: 0 10px 30px rgba(228, 44, 44, 0.2);
+                position: relative;
+                overflow: hidden;
+            ">
+                <div style="
+                    background: linear-gradient(135deg, {KSEYE_RED} 0%, #c82333 100%); 
+                    color: white; 
+                    padding: 24px; 
+                    margin-bottom: 0;
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center;
+                ">
+                    <div>
+                        <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 700;">{candidate.candidate_name}</h2>
+                        <p style="margin: 0; font-size: 16px; opacity: 0.9;">{candidate.current_title}</p>
+                        <p style="margin: 4px 0 0 0; font-size: 14px; opacity: 0.8;">
+                            {candidate.total_years} years total • {candidate.relevant_years} years relevant experience
+                        </p>
                     </div>
-                    <div style="color: #6c757d; font-size: 15px; font-weight: 500; margin-bottom: 16px;">
-                        {candidate.current_title} • {candidate.total_years} years total • {candidate.relevant_years} years relevant
+                    <div style="
+                        background: rgba(255,255,255,0.2); 
+                        padding: 16px 24px; 
+                        border-radius: 12px; 
+                        text-align: center;
+                        backdrop-filter: blur(10px);
+                    ">
+                        <div style="font-size: 32px; font-weight: bold; margin-bottom: 4px;">{score:.0f}%</div>
+                        <div style="font-size: 12px; opacity: 0.9;">MATCH SCORE</div>
                     </div>
-                """, unsafe_allow_html=True)
-                
-                # Integrated expandable details within the card
-                with st.expander("View Details", expanded=False):
-                    # Get skills for use in tabs
-                    must_have_skills = candidate.must_have_skills if isinstance(candidate.must_have_skills, list) else []
-                    nice_to_have_skills = candidate.nice_to_have_skills if isinstance(candidate.nice_to_have_skills, list) else []
-                    
-                    st.markdown("""
-                    <style>
-                        .stTabs [data-baseweb="tab-list"] {
-                            gap: 8px;
-                            margin-bottom: 10px;
-                        }
-                        .stTabs [data-baseweb="tab"] {
-                            height: 45px;
-                            min-height: 45px;
-                            padding-left: 20px;
-                            padding-right: 20px;
-                            background-color: #f8fafc;
-                            border: 1px solid #e2e8f0;
-                            color: #64748b;
-                            border-radius: 6px 6px 0 0;
-                        }
-                        .stTabs [aria-selected="true"] {
-                            background-color: #e42c2c;
-                            color: white;
-                            border-color: #e42c2c;
-                        }
-                        .tab-content {
-                            padding: 16px 0 0 0;
-                            margin: 0;
-                        }
-                        .detail-section {
-                            margin-bottom: 16px;
-                        }
-                        .detail-header {
-                            color: #1e293b;
-                            font-weight: 600;
-                            font-size: 17px;
-                            margin-bottom: 8px;
-                            padding-bottom: 4px;
-                            border-bottom: 2px solid #f1f5f9;
-                        }
-                        .all-skills {
-                            display: flex;
-                            flex-wrap: wrap;
-                            gap: 8px;
-                            margin-top: 8px;
-                        }
-                        .experience-card {
-                            background: #f8fafc;
-                            padding: 12px;
-                            border-radius: 8px;
-                            margin-bottom: 12px;
-                            border-left: 4px solid #e42c2c;
-                        }
-                        .experience-title {
-                            color: #1e293b;
-                            font-weight: 600;
-                            font-size: 16px;
-                            margin: 0 0 8px 0;
-                        }
-                        .experience-company {
-                            color: #64748b;
-                            font-weight: 500;
-                            margin: 0 0 12px 0;
-                            font-size: 15px;
-                        }
-                        .experience-desc {
-                            color: #374151;
-                            line-height: 1.6;
-                            margin: 0;
-                        }
-                    </style>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Enhanced tabs styling
+            st.markdown("""
+            <style>
+                .stTabs [data-baseweb="tab-list"] {
+                    gap: 0px;
+                    background: #f8fafc;
+                    padding: 8px;
+                    border-radius: 8px;
+                    margin: 20px 24px 0 24px;
+                }
+                .stTabs [data-baseweb="tab"] {
+                    height: 48px;
+                    padding: 0px 24px;
+                    background-color: transparent;
+                    border: none;
+                    color: #64748b;
+                    border-radius: 6px;
+                    font-weight: 500;
+                    font-size: 15px;
+                    transition: all 0.2s ease;
+                }
+                .stTabs [aria-selected="true"] {
+                    background: white;
+                    color: #e42c2c;
+                    font-weight: 600;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                .stTabs [data-baseweb="tab-panel"] {
+                    padding: 24px;
+                }
+            </style>
+            """, unsafe_allow_html=True)
+            
+            # Details tabs
+            tab1, tab2, tab3 = st.tabs(["📊 Analysis", "💼 Experience", "🎓 Skills & Education"])
+            
+            with tab1:
+                if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
+                    st.markdown("#### 🤖 AI Assessment")
+                    st.markdown(f"""
+                    <div style="
+                        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+                        padding: 20px; 
+                        border-radius: 12px; 
+                        border-left: 5px solid {KSEYE_RED};
+                        margin-bottom: 20px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+                    ">
+                        <p style="margin: 0; color: #374151; line-height: 1.7; font-size: 15px;">{candidate.ai_reasoning}</p>
+                    </div>
                     """, unsafe_allow_html=True)
-                    
-                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])
-                    
-                    with tab1:
-                        st.markdown('<div class="tab-content">', unsafe_allow_html=True)
-                        
-                        # Candidate summary
-                        st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                        st.markdown('<div class="detail-header">Candidate Summary</div>', unsafe_allow_html=True)
-                        st.markdown(f'<div style="color: #374151; line-height: 1.7; font-size: 15px;">{candidate.summary}</div>', unsafe_allow_html=True)
-                        st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        # Combined AI Assessment (scoring + notes)
-                        ai_reasoning = getattr(candidate, 'ai_reasoning', '')
-                        ai_score = getattr(candidate, 'ai_score', 0)
-                        confidence_notes = candidate.confidence_notes if candidate.confidence_notes else ''
-                        
-                        if ai_reasoning or confidence_notes:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">AI Assessment</div>', unsafe_allow_html=True)
-                            
-                            # Build combined assessment content
-                            assessment_content = ""
-                            
-                            if ai_reasoning:
-                                assessment_content += f"<strong>Score: {ai_score:.0f}%</strong><br><br>"
-                                assessment_content += f"<strong>Evaluation:</strong><br>{ai_reasoning}"
-                            
-                            if confidence_notes:
-                                if ai_reasoning:
-                                    assessment_content += "<br><br>"
-                                assessment_content += f"<strong>Additional Notes:</strong><br>{confidence_notes}"
-                            
-                            st.markdown(f"""
-                            <div style="padding: 16px; background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%); border-radius: 8px; color: #374151; border-left: 4px solid {KSEYE_RED}; line-height: 1.6;">
-                                {assessment_content}
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with tab2:
-                        st.markdown('<div class="tab-content">', unsafe_allow_html=True)
-                        
-                        # Experience highlights first
-                        highlights = candidate.experience_highlights if isinstance(candidate.experience_highlights, list) else []
-                        if highlights:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">Key Experience Highlights</div>', unsafe_allow_html=True)
-                            for highlight in highlights[:6]:
-                                st.markdown(f'<div style="padding: 8px 0; color: #374151; border-bottom: 1px solid #f1f5f9;">• {highlight}</div>', unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        # Detailed experience if available
-                        if hasattr(candidate, 'experience') and candidate.experience:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">Work Experience Details</div>', unsafe_allow_html=True)
-                            for exp in candidate.experience:
-                                st.markdown(f"""
-                                <div class="experience-card">
-                                    <h4 class="experience-title">{exp.get('title', 'N/A')}</h4>
-                                    <p class="experience-company">{exp.get('company', 'N/A')} • {exp.get('duration', 'N/A')}</p>
-                                    <p class="experience-desc">{exp.get('description', 'N/A')}</p>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        elif not highlights:
-                            st.info("No detailed experience information extracted from CV")
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with tab3:
-                        st.markdown('<div class="tab-content">', unsafe_allow_html=True)
-                        
-                        # Skills section with better organization
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">Required Skills Found</div>', unsafe_allow_html=True)
-                            if must_have_skills:
-                                skills_html = ""
-                                for skill in must_have_skills:
-                                    skills_html += f'<span class="skill-chip must-have">{skill}</span>'
-                                st.markdown(f'<div class="all-skills">{skills_html}</div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<div style="color: #9ca3af; font-style: italic;">None identified</div>', unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        with col2:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">Additional Skills</div>', unsafe_allow_html=True)
-                            if nice_to_have_skills:
-                                skills_html = ""
-                                for skill in nice_to_have_skills:
-                                    skills_html += f'<span class="skill-chip">{skill}</span>'
-                                st.markdown(f'<div class="all-skills">{skills_html}</div>', unsafe_allow_html=True)
-                            else:
-                                st.markdown('<div style="color: #9ca3af; font-style: italic;">None identified</div>', unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        # Education section
-                        if hasattr(candidate, 'education') and candidate.education:
-                            st.markdown('<div class="detail-section">', unsafe_allow_html=True)
-                            st.markdown('<div class="detail-header">Education Background</div>', unsafe_allow_html=True)
-                            for edu in candidate.education:
-                                st.markdown(f"""
-                                <div style="background: #f8fafc; padding: 14px; border-radius: 8px; margin-bottom: 10px; border-left: 3px solid #e42c2c;">
-                                    <div style="color: #1e293b; font-weight: 600; margin-bottom: 4px;">{edu.get('degree', 'N/A')}</div>
-                                    <div style="color: #64748b; font-size: 14px;">{edu.get('institution', 'N/A')} • {edu.get('year', 'N/A')}</div>
-                                </div>
-                                """, unsafe_allow_html=True)
-                            st.markdown('</div>', unsafe_allow_html=True)
-                        
-                        st.markdown('</div>', unsafe_allow_html=True)
                 
-                # Close the main card div
-                st.markdown('</div>', unsafe_allow_html=True)
+                if hasattr(candidate, 'summary') and candidate.summary:
+                    st.markdown("#### 📝 Professional Summary")
+                    st.markdown(f"""
+                    <div style="
+                        background: #ffffff; 
+                        padding: 20px; 
+                        border-radius: 12px; 
+                        border: 1px solid #e5e7eb;
+                        margin-bottom: 20px;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    ">
+                        <p style="margin: 0; color: #374151; line-height: 1.7; font-size: 15px;">{candidate.summary}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            with tab2:
+                if hasattr(candidate, 'experience_highlights') and candidate.experience_highlights:
+                    st.markdown("#### 💼 Experience Highlights")
+                    for i, highlight in enumerate(candidate.experience_highlights):
+                        st.markdown(f"""
+                        <div style="
+                            background: #ffffff; 
+                            padding: 18px; 
+                            border-radius: 12px; 
+                            margin-bottom: 12px; 
+                            border-left: 4px solid {KSEYE_RED};
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                            border: 1px solid #f1f5f9;
+                        ">
+                            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                <div style="
+                                    background: {KSEYE_RED}; 
+                                    color: white; 
+                                    width: 24px; 
+                                    height: 24px; 
+                                    border-radius: 50%; 
+                                    display: flex; 
+                                    align-items: center; 
+                                    justify-content: center; 
+                                    font-size: 12px; 
+                                    font-weight: bold;
+                                    flex-shrink: 0;
+                                    margin-top: 2px;
+                                ">
+                                    {i+1}
+                                </div>
+                                <p style="margin: 0; color: #374151; line-height: 1.6; font-size: 15px;">{highlight}</p>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                else:
+                    st.info("💡 No detailed experience highlights available for this candidate.")
+            
+            with tab3:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if hasattr(candidate, 'must_have_skills') and candidate.must_have_skills:
+                        st.markdown("#### ✅ Must-Have Skills")
+                        skills_html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">'
+                        for skill in candidate.must_have_skills:
+                            skills_html += f"""
+                            <span style="
+                                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); 
+                                border: 1px solid #86efac; 
+                                color: #15803d; 
+                                padding: 8px 14px; 
+                                border-radius: 20px; 
+                                font-size: 13px; 
+                                font-weight: 500;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                display: inline-block;
+                                margin-bottom: 8px;
+                            ">
+                                {skill}
+                            </span>
+                            """
+                        skills_html += '</div>'
+                        st.markdown(skills_html, unsafe_allow_html=True)
+                
+                with col2:
+                    if hasattr(candidate, 'nice_to_have_skills') and candidate.nice_to_have_skills:
+                        st.markdown("#### 💡 Nice-to-Have Skills")
+                        skills_html = '<div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px;">'
+                        for skill in candidate.nice_to_have_skills:
+                            skills_html += f"""
+                            <span style="
+                                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+                                border: 1px solid #d1d5db; 
+                                color: #374151; 
+                                padding: 8px 14px; 
+                                border-radius: 20px; 
+                                font-size: 13px; 
+                                font-weight: 500;
+                                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                                display: inline-block;
+                                margin-bottom: 8px;
+                            ">
+                                {skill}
+                            </span>
+                            """
+                        skills_html += '</div>'
+                        st.markdown(skills_html, unsafe_allow_html=True)
+                
+                if hasattr(candidate, 'education') and candidate.education:
+                    st.markdown("#### 🎓 Education Background")
+                    for edu in candidate.education:
+                        st.markdown(f"""
+                        <div style="
+                            background: #ffffff; 
+                            padding: 18px; 
+                            border-radius: 12px; 
+                            margin-bottom: 12px; 
+                            border-left: 3px solid {KSEYE_RED};
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                            border: 1px solid #f1f5f9;
+                        ">
+                            <div style="color: #1e293b; font-weight: 600; margin-bottom: 8px; font-size: 16px;">
+                                {edu.get('degree', 'N/A')}
+                            </div>
+                            <div style="color: #64748b; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                                <span>🏛️ {edu.get('institution', 'N/A')}</span>
+                                <span>•</span>
+                                <span>📅 {edu.get('year', 'N/A')}</span>
+                            </div>
+                        </div>
+                        """, unsafe_allow_html=True)
+        
+        else:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
+                border: 2px dashed #d1d5db; 
+                border-radius: 16px; 
+                padding: 40px; 
+                text-align: center; 
+                margin: 40px 0;
+            ">
+                <div style="font-size: 48px; margin-bottom: 16px;">👆</div>
+                <h3 style="color: #374151; margin: 0 0 12px 0; font-weight: 600;">Select a Candidate to View Details</h3>
+                <p style="color: #6b7280; margin: 0; font-size: 16px;">
+                    Click on any row in the table above to view comprehensive analysis, skills assessment, and experience breakdown.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
         
         st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)
