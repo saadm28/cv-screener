@@ -313,7 +313,7 @@ Return your response in this exact JSON format:
 {{
     "score": 85,
     "reasoning": "Strong candidate with 8+ years relevant experience in Python development. Excellent match for senior role requirements including microservices, AWS, and team leadership. Missing some nice-to-have skills like Kubernetes but overall very well-qualified.",
-    "brief_summary": "Senior Python Developer with 8y experience, strong in microservices & AWS, excellent team leadership skills",
+    "brief_summary": "Senior Python Developer with 8y experience, matches 85% of requirements with strong microservices & AWS expertise",
     "experience_match": 88,
     "skills_coverage": 82,
     "nice_to_have": 70,
@@ -321,7 +321,7 @@ Return your response in this exact JSON format:
     "overall_fit": 90
 }}
 
-The brief_summary should be 1-2 sentences maximum, highlighting the candidate's current role, key experience, and standout skills relevant to this position."""
+The brief_summary should be 1-2 sentences maximum showing: current role/title, years of experience, match percentage or key alignment with job requirements, and 1-2 standout relevant skills/strengths."""
 
         response = client.chat.completions.create(
             model="gpt-4o-mini",

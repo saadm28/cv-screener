@@ -372,39 +372,150 @@ if page == "Home":
 # CV Analyzer Page
 elif page == "CV Analyzer":
     st.markdown(f"""
-    <div class="kseye-header">
-        <h1 class="page-title">CV Analyzer</h1>
-        <p class="page-subtitle">Upload your job requirements and candidate CVs</p>
-    </div>
+    <div class=\"kseye-header\">\n        <h1 class=\"page-title\">CV Analyzer</h1>\n        <p class=\"page-subtitle\">Upload your job requirements and candidate CVs</p>\n    </div>
     """, unsafe_allow_html=True)
-    
+
+    # Helper to render analysis results (table + details below)
+    def render_analysis_results(results_key: str):
+        results = st.session_state.get(f"analysis_results_{results_key}")
+        if not results:
+            return
+
+        scored_candidates = results["scored_candidates"]
+        job_title_display = results["job_title"]
+        total_candidates = results["total_candidates"]
+
+        st.markdown(f"""
+        <div class=\"results-header\">\n            <h2 style=\"color: #2c3e50; margin-bottom: 8px;\">Analysis Results</h2>\n            <p style=\"color: #6c757d; margin: 0;\">Analyzed {total_candidates} candidates for <strong>{job_title_display}</strong></p>\n        </div>
+        """, unsafe_allow_html=True)
+
+        # Prepare table rows (cap at 50)
+        max_display = 50
+        display_candidates = scored_candidates[:max_display]
+        if len(scored_candidates) > max_display:
+            st.info(f"Showing top {max_display} candidates out of {len(scored_candidates)} total candidates.")
+
+        candidate_data = []
+        for i, (score, candidate) in enumerate(display_candidates):
+            candidate_data.append({
+                "rank": i + 1,
+                "name": candidate.candidate_name,
+                "summary": getattr(candidate, 'brief_summary', f"{getattr(candidate, 'current_title', 'Professional')} with {getattr(candidate, 'relevant_years', 'N/A')}y relevant experience"),
+                "score": score,
+                "candidate_obj": candidate,
+            })
+
+        st.subheader("Candidate Rankings")
+        st.caption("Click View details to see full analysis below")
+
+        # Table header
+        h1, h2, h3, h4, h5 = st.columns([0.8, 3, 1, 6, 1.4])
+        with h1: st.markdown("**Rank**")
+        with h2: st.markdown("**Name**")
+        with h3: st.markdown("**Score**")
+        with h4: st.markdown("**Summary**")
+        with h5: st.markdown("**Action**")
+
+        # Table rows with a View button per row
+        for idx, row in enumerate(candidate_data):
+            summary = row["summary"]
+            summary = (summary[:120] + "...") if isinstance(summary, str) and len(summary) > 120 else summary
+            c1, c2, c3, c4, c5 = st.columns([0.8, 3, 1, 6, 1.4])
+            c1.write(row["rank"]) 
+            c2.write(row["name"]) 
+            c3.write(f"{row['score']:.0f}%") 
+            c4.write(summary)
+            if c5.button("View details", key=f"view_{idx}"):
+                st.session_state["selected_candidate_idx"] = idx
+                st.rerun()
+
+        selected_idx = st.session_state.get("selected_candidate_idx")
+
+        # Details panel
+        if selected_idx is not None and 0 <= selected_idx < len(candidate_data):
+            chosen = candidate_data[selected_idx]
+            candidate = chosen["candidate_obj"]
+            score = chosen["score"]
+
+            # Simple header and tabs (no extra CSS)
+            st.markdown(f"### {candidate.candidate_name}")
+            st.caption(getattr(candidate, 'current_title', 'Professional'))
+            st.write(f"Match score: {score:.0f}%")
+
+            tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills"])
+
+            with tab1:
+                if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
+                    st.markdown("#### AI Assessment")
+                    st.write(candidate.ai_reasoning)
+                if hasattr(candidate, 'summary') and candidate.summary:
+                    st.markdown("#### Professional Summary")
+                    st.write(candidate.summary)
+                if hasattr(candidate, 'strengths') and candidate.strengths:
+                    st.markdown("#### Key Strengths")
+                    for s in candidate.strengths:
+                        st.markdown(f"- {s}")
+
+            with tab2:
+                if hasattr(candidate, 'experience_highlights') and candidate.experience_highlights:
+                    st.markdown("#### Experience Highlights")
+                    for i, h in enumerate(candidate.experience_highlights):
+                        st.markdown(f"- {h}")
+                else:
+                    st.info("No detailed experience highlights available.")
+
+            with tab3:
+                col1, col2 = st.columns(2)
+                with col1:
+                    if hasattr(candidate, 'must_have_skills') and candidate.must_have_skills:
+                        st.markdown("#### Must-Have Skills")
+                        for sk in candidate.must_have_skills:
+                            st.markdown(f"- {sk}")
+                with col2:
+                    if hasattr(candidate, 'nice_to_have_skills') and candidate.nice_to_have_skills:
+                        st.markdown("#### Nice-to-Have Skills")
+                        for sk in candidate.nice_to_have_skills:
+                            st.markdown(f"- {sk}")
+                if hasattr(candidate, 'education') and candidate.education:
+                    st.markdown("#### Education Background")
+                    for edu in candidate.education:
+                        degree = edu.get('degree', 'N/A')
+                        institution = edu.get('institution', 'N/A')
+                        year = edu.get('year', 'N/A')
+                        st.markdown(f"- {degree} — {institution} ({year})")
+
+        else:
+            st.info("Use the selector above to choose a candidate and view details.")
+
+        st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)
+
     # Input Section
     with st.container():
         st.markdown("### Job Details")
-        
+
         job_title = st.text_input("Job Title", placeholder="e.g., Senior Python Developer")
-        
         job_description = st.text_area(
-            "Job Description", 
-            height=200, 
+            "Job Description",
+            height=200,
             placeholder="Paste the complete job description including requirements, responsibilities, and qualifications...",
-            help="Include all relevant details about the role"
+            help="Include all relevant details about the role",
         )
-        
+
         st.markdown("### Upload CVs")
         uploaded_files = st.file_uploader(
-            "Upload candidate CVs", 
-            accept_multiple_files=True, 
+            "Upload candidate CVs",
+            accept_multiple_files=True,
             type=["pdf", "docx", "doc", "zip"],
-            help="You can upload individual CV files or a ZIP containing multiple CVs"
+            help="You can upload individual CV files or a ZIP containing multiple CVs",
         )
-        
+
         # Full-width button styling with higher specificity
-        st.markdown("""
+        st.markdown(
+            """
         <style>
-        div[data-testid="stButton"] > button,
+        div[data-testid=\"stButton\"] > button,
         .stButton > button,
-        button[kind="primary"] {
+        button[kind=\"primary\"] {
             width: 100% !important;
             height: 50px !important;
             font-size: 16px !important;
@@ -413,615 +524,92 @@ elif page == "CV Analyzer":
             margin-top: 10px !important;
             display: block !important;
         }
-        
-        /* Fix expander display issues */
-        .streamlit-expanderHeader {
-            font-size: 14px !important;
-            font-weight: 500 !important;
-        }
-        
-        details[open] > summary {
-            margin-bottom: 10px !important;
-        }
+        .streamlit-expanderHeader { font-size: 14px !important; font-weight: 500 !important; }
+        details[open] > summary { margin-bottom: 10px !important; }
         </style>
-        """, unsafe_allow_html=True)
-        
-        analyze_button = st.button("Analyze Candidates", type="primary")
-    
+            """,
+            unsafe_allow_html=True,
+        )
+
+    analyze_button = st.button("Analyze Candidates", type="primary")
+
     # Analysis Section
     if analyze_button:
         if not job_title.strip():
             st.error("Please enter a job title")
             st.stop()
-        
         if not job_description.strip():
             st.error("Please enter a job description")
             st.stop()
-        
         if not uploaded_files:
             st.error("Please upload at least one CV")
             st.stop()
-        
+
         # Check OpenAI availability
         openai_key = os.getenv("OPENAI_API_KEY", "").strip()
         if not openai_key:
             st.error("OpenAI API key not configured. Please add OPENAI_API_KEY to your .env file.")
             st.stop()
 
-        # Create a unique key for this analysis session
         analysis_key = f"{job_title}_{len(uploaded_files)}_{hash(job_description[:100])}"
-        
-        # Check if we already have results for this exact job/files combination
         if f"analysis_results_{analysis_key}" not in st.session_state:
             with st.spinner("Analyzing candidates... This may take a few moments."):
                 try:
-                    # Load and parse CVs
                     docs = load_files_from_uploader(uploaded_files)
-                    
                     if not docs:
                         st.error("❌ No valid CV files found in the uploaded files.")
                         st.stop()
-                    
-                    # Prepare job context for AI
+
                     job_context = {
                         "job_title": job_title.strip(),
                         "job_description": job_description.strip(),
-                        "analysis_instructions": "Analyze each CV against this job and provide detailed insights"
+                        "analysis_instructions": "Analyze each CV against this job and provide detailed insights",
                     }
-                    
-                    # Analyze each CV with AI
+
                     candidates = []
                     progress_bar = st.progress(0)
                     status_text = st.empty()
-                    
                     for i, (filename, cv_text) in enumerate(docs):
                         status_text.text(f"Analyzing {filename}... ({i+1}/{len(docs)})")
-                        
                         cleaned_text = clean_text(cv_text)
                         analysis = analyze_cv_with_openai(cleaned_text, filename, job_context)
-                        
                         candidates.append(analysis)
                         progress_bar.progress((i + 1) / len(docs))
-                    
                     status_text.empty()
                     progress_bar.empty()
-                    
+
                     if not candidates:
                         st.error("❌ Could not analyze any CVs. Please check the file formats.")
                         st.stop()
-                    
-                    # Calculate scores using AI analysis and rank candidates
+
                     scored_candidates = []
-                    
                     progress_bar = st.progress(0)
                     total_candidates_to_score = len(candidates)
-                    
                     for i, candidate in enumerate(candidates):
-                        # Update progress
                         progress_bar.progress((i + 1) / total_candidates_to_score)
-                        
-                        # Get AI-powered score, reasoning, and brief summary
                         score, reasoning, brief_summary = score_candidate_with_ai(candidate, job_title, job_description)
-                        
-                        # Store score with reasoning and summary for display
                         candidate.ai_score = score
                         candidate.ai_reasoning = reasoning
                         candidate.brief_summary = brief_summary
-                        
                         scored_candidates.append((score, candidate))
-                    
                     progress_bar.empty()
-                    
-                    # Sort by score (highest first)
                     scored_candidates.sort(key=lambda x: x[0], reverse=True)
-                    
-                    # Store results in session state
+
                     st.session_state[f"analysis_results_{analysis_key}"] = {
                         "scored_candidates": scored_candidates,
                         "job_title": job_title,
-                        "total_candidates": len(candidates)
+                        "total_candidates": len(candidates),
                     }
-                    
+                    st.session_state["current_analysis_key"] = analysis_key
+                    st.session_state.pop("selected_candidate_idx", None)
                 except Exception as e:
                     st.error("An error occurred during analysis: " + str(e))
                     st.exception(e)
                     st.stop()
-        
-        # Get results from session state
-        results = st.session_state[f"analysis_results_{analysis_key}"]
-        scored_candidates = results["scored_candidates"]
-        job_title_display = results["job_title"]
-        total_candidates = results["total_candidates"]
-        
-        # Display Results
-        st.markdown(f"""
-        <div class="results-header">
-            <h2 style="color: #2c3e50; margin-bottom: 8px;">Analysis Results</h2>
-            <p style="color: #6c757d; margin: 0;">Analyzed {total_candidates} candidates for <strong>{job_title_display}</strong></p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Display all candidates (up to 50 max for performance)
-        max_display = 50
-        display_candidates = scored_candidates[:max_display]
-        
-        if len(scored_candidates) > max_display:
-            st.info(f"Showing top {max_display} candidates out of {len(scored_candidates)} total candidates.")
-        
-        # Create candidate summary table
-        candidate_data = []
-        for i, (score, candidate) in enumerate(display_candidates):
-            rank = i + 1
-            # Get brief summary - either from AI or create a fallback
-            brief_summary = getattr(candidate, 'brief_summary', f"{candidate.current_title} with {candidate.relevant_years}y relevant experience")
-            
-            candidate_data.append({
-                "rank": rank,
-                "name": candidate.candidate_name,
-                "summary": brief_summary,
-                "score": score,
-                "candidate_obj": candidate
-            })
-        
-        st.markdown("### 📊 Candidate Rankings")
-        
-        # Custom modern table with click functionality
-        st.markdown("""
-        <style>
-            .modern-table {
-                background: white;
-                border-radius: 16px;
-                border: 1px solid #e5e7eb;
-                overflow: hidden;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.08);
-                margin: 20px 0;
-            }
-            .table-header {
-                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-                border-bottom: 2px solid #e5e7eb;
-                padding: 0;
-            }
-            .table-header-cell {
-                padding: 20px 24px;
-                font-weight: 700;
-                font-size: 14px;
-                color: #374151;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                border-right: 1px solid #e5e7eb;
-            }
-            .table-header-cell:last-child {
-                border-right: none;
-            }
-            .table-row {
-                border-bottom: 1px solid #f3f4f6;
-                transition: all 0.2s ease;
-                cursor: pointer;
-                padding: 0;
-            }
-            .table-row:hover {
-                background: #f8fafc;
-                transform: scale(1.001);
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            .table-row:last-child {
-                border-bottom: none;
-            }
-            .table-cell {
-                padding: 20px 24px;
-                vertical-align: middle;
-                border-right: 1px solid #f3f4f6;
-                font-size: 15px;
-            }
-            .table-cell:last-child {
-                border-right: none;
-            }
-            .rank-cell {
-                width: 80px;
-                text-align: center;
-                font-weight: 700;
-                color: #6b7280;
-            }
-            .name-cell {
-                width: 200px;
-                font-weight: 600;
-                color: #1f2937;
-            }
-            .summary-cell {
-                color: #4b5563;
-                line-height: 1.6;
-                max-width: 400px;
-            }
-            .score-cell {
-                width: 120px;
-                text-align: center;
-            }
-            .score-badge {
-                display: inline-block;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-weight: 700;
-                font-size: 14px;
-                color: white;
-                background: linear-gradient(135deg, #e42c2c 0%, #c82333 100%);
-                box-shadow: 0 2px 4px rgba(228, 44, 44, 0.2);
-            }
-            
-            /* Modal styles */
-            .modal-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                background: rgba(0, 0, 0, 0.5);
-                backdrop-filter: blur(4px);
-                z-index: 9999;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                animation: fadeIn 0.2s ease;
-            }
-            .modal-content {
-                background: white;
-                border-radius: 20px;
-                width: 90%;
-                max-width: 800px;
-                max-height: 90vh;
-                overflow-y: auto;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-                animation: slideIn 0.3s ease;
-            }
-            @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
-            }
-            @keyframes slideIn {
-                from { transform: translateY(-50px) scale(0.9); opacity: 0; }
-                to { transform: translateY(0) scale(1); opacity: 1; }
-            }
-            .modal-header {
-                background: linear-gradient(135deg, #e42c2c 0%, #c82333 100%);
-                color: white;
-                padding: 32px;
-                border-radius: 20px 20px 0 0;
-                position: relative;
-            }
-            .close-btn {
-                position: absolute;
-                top: 24px;
-                right: 24px;
-                background: rgba(255, 255, 255, 0.2);
-                border: none;
-                color: white;
-                font-size: 24px;
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: all 0.2s ease;
-            }
-            .close-btn:hover {
-                background: rgba(255, 255, 255, 0.3);
-                transform: scale(1.1);
-            }
-        </style>
-        """, unsafe_allow_html=True)
-        
-        # Create markdown table - much cleaner and more reliable
-        markdown_table = """
-| Rank | Candidate | Score | Summary |
-|------|-----------|-------|---------|
-"""
-        
-        for candidate_info in candidate_data:
-            # Clean the summary text for markdown (escape pipes and limit length)
-            clean_summary = candidate_info['summary'].replace('|', '\\|')
-            if len(clean_summary) > 150:
-                clean_summary = clean_summary[:150] + "..."
-            markdown_table += f"| **{candidate_info['rank']}** | **{candidate_info['name']}** | **{candidate_info['score']:.0f}%** | {clean_summary} |\n"
-        
-        st.subheader("Candidate Rankings")
-        st.markdown(markdown_table)
-        
-        # Simple candidate selection using selectbox
-        candidate_names = [c['name'] for c in candidate_data]
-        selected_name = st.selectbox("Select a candidate for detailed analysis:", [""] + candidate_names, key="candidate_select")
-        
-        # Show candidate details when selected
-        if selected_name:
-            # Find the selected candidate
-            selected_candidate = next((c for c in candidate_data if c['name'] == selected_name), None)
-            if selected_candidate:
-                candidate = selected_candidate["candidate_obj"]
-                score = selected_candidate["score_value"]
-            
-            # Clean candidate details card
-            st.markdown(f"""
-            <div style="
-                background: white; 
-                border: 1px solid #e5e7eb; 
-                border-radius: 8px; 
-                padding: 0; 
-                margin: 24px 0; 
-                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            ">
-                <div style="
-                    background: {KSEYE_RED}; 
-                    color: white; 
-                    padding: 24px; 
-                    display: flex; 
-                    justify-content: space-between; 
-                    align-items: center;
-                ">
-                    <div>
-                        <h2 style="margin: 0 0 8px 0; font-size: 24px; font-weight: 600;">{candidate.candidate_name}</h2>
-                        <p style="margin: 0; font-size: 16px; opacity: 0.9;">{getattr(candidate, 'current_title', 'Professional')}</p>
-                    </div>
-                    <div style="
-                        background: rgba(255,255,255,0.2); 
-                        padding: 12px 24px; 
-                        border-radius: 6px; 
-                        text-align: center;
-                    ">
-                        <div style="font-size: 28px; font-weight: 700; margin-bottom: 4px;">{score:.0f}%</div>
-                        <div style="font-size: 11px; opacity: 0.8;">MATCH</div>
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # CSS for clean tabs
-            st.markdown("""
-            <style>
-                .stTabs [data-baseweb="tab-list"] {
-                    background: #f8f9fa;
-                    border-radius: 8px;
-                    padding: 4px;
-                }
-                .stTabs [data-baseweb="tab"] {
-                    background: transparent;
-                    border-radius: 6px;
-                    color: #6b7280;
-                    font-weight: 500;
-                }
-                .stTabs [data-baseweb="tab"]:hover {
-                    background: rgba(255,255,255,0.5);
-                }
-                .stTabs [aria-selected="true"] {
-                    background: white;
-                    color: #374151;
-                    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-                }
-                .stTabs [data-baseweb="tab-panel"] {
-                    padding: 24px 0;
-                }
-            </style>
-            """, unsafe_allow_html=True)
-            
-            # Details tabs
-            tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills"])
-            
-            with tab1:
-                if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
-                    st.markdown("#### � AI Assessment")
-                    st.markdown(f"""
-                    <div style="
-                        background: linear-gradient(135deg, #fef7ff 0%, #fdf4ff 100%); 
-                        padding: 24px; 
-                        border-radius: 16px; 
-                        border-left: 6px solid {KSEYE_RED};
-                        margin-bottom: 24px;
-                        box-shadow: 0 4px 16px rgba(228, 44, 44, 0.1);
-                    ">
-                        <p style="margin: 0; color: #374151; line-height: 1.8; font-size: 16px;">
-                            {candidate.ai_reasoning}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                if hasattr(candidate, 'summary') and candidate.summary:
-                    st.markdown("#### � Professional Summary")
-                    st.markdown(f"""
-                    <div style="
-                        background: #ffffff; 
-                        padding: 24px; 
-                        border-radius: 16px; 
-                        border: 1px solid #e5e7eb;
-                        margin-bottom: 24px;
-                        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-                    ">
-                        <p style="margin: 0; color: #374151; line-height: 1.8; font-size: 16px;">
-                            {candidate.summary}
-                        </p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                if hasattr(candidate, 'strengths') and candidate.strengths:
-                    st.markdown("#### ⭐ Key Strengths")
-                    strengths_html = '<div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px;">'
-                    for strength in candidate.strengths:
-                        strengths_html += f"""
-                        <div style="
-                            background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); 
-                            border: 2px solid #86efac; 
-                            color: #15803d; 
-                            padding: 12px 20px; 
-                            border-radius: 24px; 
-                            font-size: 14px;
-                            font-weight: 600;
-                            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                            display: inline-flex;
-                            align-items: center;
-                            gap: 8px;
-                            transition: transform 0.2s ease;
-                        " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <span style="font-size: 14px;">✓</span> {strength}
-                        </div>
-                        """
-                    strengths_html += '</div>'
-                    st.markdown(strengths_html, unsafe_allow_html=True)
-            
-            with tab2:
-                if hasattr(candidate, 'experience_highlights') and candidate.experience_highlights:
-                    st.markdown("#### 💼 Experience Highlights")
-                    for i, highlight in enumerate(candidate.experience_highlights):
-                        st.markdown(f"""
-                        <div style="
-                            background: #ffffff; 
-                            padding: 24px; 
-                            border-radius: 16px; 
-                            margin-bottom: 16px; 
-                            border-left: 5px solid {KSEYE_RED};
-                            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-                            border: 1px solid #f1f5f9;
-                            transition: transform 0.2s ease;
-                        " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div style="display: flex; align-items: flex-start; gap: 16px;">
-                                <div style="
-                                    background: {KSEYE_RED}; 
-                                    color: white; 
-                                    width: 32px; 
-                                    height: 32px; 
-                                    border-radius: 50%; 
-                                    display: flex; 
-                                    align-items: center; 
-                                    justify-content: center; 
-                                    font-size: 14px; 
-                                    font-weight: bold;
-                                    flex-shrink: 0;
-                                    margin-top: 2px;
-                                    box-shadow: 0 2px 8px rgba(228, 44, 44, 0.3);
-                                ">
-                                    {i+1}
-                                </div>
-                                <p style="margin: 0; color: #374151; line-height: 1.7; font-size: 16px;">
-                                    {highlight}
-                                </p>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                else:
-                    st.markdown("""
-                    <div style="
-                        text-align: center; 
-                        padding: 60px 20px; 
-                        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-                        border-radius: 16px;
-                        border: 2px dashed #d1d5db;
-                    ">
-                        <div style="font-size: 48px; margin-bottom: 16px;">�</div>
-                        <h4 style="color: #6b7280; margin: 0; font-weight: 500;">
-                            No detailed experience highlights available
-                        </h4>
-                    </div>
-                    """, unsafe_allow_html=True)
-            
-            with tab3:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if hasattr(candidate, 'must_have_skills') and candidate.must_have_skills:
-                        st.markdown("#### ✅ Must-Have Skills")
-                        skills_html = '<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px;">'
-                        for skill in candidate.must_have_skills:
-                            skills_html += f"""
-                            <span style="
-                                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%); 
-                                border: 2px solid #86efac; 
-                                color: #15803d; 
-                                padding: 10px 16px; 
-                                border-radius: 20px; 
-                                font-size: 13px; 
-                                font-weight: 600;
-                                box-shadow: 0 3px 6px rgba(0,0,0,0.1);
-                                display: inline-block;
-                                margin-bottom: 8px;
-                                transition: transform 0.2s ease;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                                {skill}
-                            </span>
-                            """
-                        skills_html += '</div>'
-                        st.markdown(skills_html, unsafe_allow_html=True)
-                
-                with col2:
-                    if hasattr(candidate, 'nice_to_have_skills') and candidate.nice_to_have_skills:
-                        st.markdown("#### 💡 Nice-to-Have Skills")
-                        skills_html = '<div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px;">'
-                        for skill in candidate.nice_to_have_skills:
-                            skills_html += f"""
-                            <span style="
-                                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
-                                border: 2px solid #d1d5db; 
-                                color: #374151; 
-                                padding: 10px 16px; 
-                                border-radius: 20px; 
-                                font-size: 13px; 
-                                font-weight: 500;
-                                box-shadow: 0 3px 6px rgba(0,0,0,0.08);
-                                display: inline-block;
-                                margin-bottom: 8px;
-                                transition: all 0.2s ease;
-                            " onmouseover="this.style.transform='scale(1.05)'; this.style.borderColor='#9ca3af'" onmouseout="this.style.transform='scale(1)'; this.style.borderColor='#d1d5db'">
-                                {skill}
-                            </span>
-                            """
-                        skills_html += '</div>'
-                        st.markdown(skills_html, unsafe_allow_html=True)
-                
-                # Education section
-                if hasattr(candidate, 'education') and candidate.education:
-                    st.markdown("#### 🎓 Education Background")
-                    for edu in candidate.education:
-                        st.markdown(f"""
-                        <div style="
-                            background: #ffffff; 
-                            padding: 24px; 
-                            border-radius: 16px; 
-                            margin-bottom: 16px; 
-                            border-left: 4px solid {KSEYE_RED};
-                            box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-                            border: 1px solid #f1f5f9;
-                            transition: transform 0.2s ease;
-                        " onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">
-                            <div style="color: #1e293b; font-weight: 700; margin-bottom: 12px; font-size: 18px;">
-                                {edu.get('degree', 'N/A')}
-                            </div>
-                            <div style="color: #64748b; font-size: 15px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <span>🏛️</span> {edu.get('institution', 'N/A')}
-                                </span>
-                                <span style="display: flex; align-items: center; gap: 6px;">
-                                    <span>📅</span> {edu.get('year', 'N/A')}
-                                </span>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-        
-        else:
-            st.markdown("""
-            <div style="
-                background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); 
-                border: 3px dashed #0ea5e9; 
-                border-radius: 20px; 
-                padding: 50px 30px; 
-                text-align: center; 
-                margin: 40px 0;
-                box-shadow: 0 8px 32px rgba(14, 165, 233, 0.1);
-            ">
-                <div style="font-size: 64px; margin-bottom: 20px;">👆</div>
-                <h2 style="color: #0c4a6e; margin: 0 0 16px 0; font-weight: 700; font-size: 24px;">
-                    Select a Candidate to View Details
-                </h2>
-                <p style="color: #075985; margin: 0; font-size: 18px; font-weight: 500;">
-                    Click on any row in the table above to view comprehensive analysis,<br>
-                    skills assessment, and detailed experience breakdown.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)
+
+        render_analysis_results(analysis_key)
+
+    # If already analyzed previously in this session, show results even on rerun
+    if (not analyze_button) and st.session_state.get("current_analysis_key") and \
+       f"analysis_results_{st.session_state['current_analysis_key']}" in st.session_state:
+        render_analysis_results(st.session_state["current_analysis_key"])
