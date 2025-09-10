@@ -123,19 +123,25 @@ st.markdown(f"""
     /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* Global Typography (avoid overriding icon fonts) */
-    html, body, p, h1, h2, h3, h4, h5, h6, span, div, li, a, button, input, textarea {{
+    /* Global Typography (scoped to text elements; don't override icon glyph fonts) */
+    html, body, p, h1, h2, h3, h4, h5, h6, div, span, li, a, button, input, textarea {{
         font-family: 'Inter', sans-serif;
     }}
-    /* Preserve any icon / material glyph fonts */
-    .material-icons, .material-icons-outlined, [class*="keyboard_double_arrow"], [data-testid="collapsedControl"] span { 
-        font-family: 'Material Icons' !important; 
-    }
+    /* Restore material icon font */
+    .material-icons, .material-icons-outlined, [data-testid="collapsedControl"] span {{
+        font-family: 'Material Icons' !important;
+        font-weight: normal !important;
+        font-style: normal !important;
+        text-transform: none !important;
+        letter-spacing: normal !important;
+        line-height: 1 !important;
+    }}
     
     /* Hide Streamlit elements */
     #MainMenu {{visibility: hidden;}}
     .stDeployButton {{display: none;}}
-    header {{visibility: hidden;}}
+    /* Keep header visible (was hidden earlier causing ghost text) */
+    header {{visibility: visible;}}
     
     /* Main container */
     .main .block-container {{
