@@ -120,7 +120,8 @@ KSEYE_LIGHT = "#f8f9fa"
 # Custom CSS with KSEYE branding
 st.markdown(f"""
 <style>
-    /* Import Google Fonts */                    tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
     /* Global Styles */
     * {{
@@ -518,6 +519,8 @@ elif page == "CV Analyzer":
                     
                 elif error:
                     st.warning(f"⚠️ Could not fetch market rate data: {error}")
+                else:
+                    st.info("ℹ️ No salary information available for this role and location combination. Please try a different city or check the job title.")
             
             st.markdown("---")
 
@@ -537,6 +540,8 @@ elif page == "CV Analyzer":
             c2.write(row["name"]) 
             c3.write(f"{row['score']:.0f}%") 
             c4.write(row["summary"])  # Full summary without truncation
+
+        st.markdown("---")
 
         # Detailed Candidate Analysis Section
         st.markdown("### Detailed Candidate Analysis")
@@ -563,16 +568,15 @@ elif page == "CV Analyzer":
                 # Display candidate details
                 st.markdown(f"#### {candidate.candidate_name}")
                 st.caption(getattr(candidate, 'current_title', 'Professional'))
-                st.write(f"**Match score:** {score:.0f}%")
+                st.write(f"**Match Score:** {score:.0f}%")
+                
+                # Company Values Fit Score (displayed prominently)
+                if hasattr(candidate, 'company_fit_score'):
+                    st.write(f"**Company Values Fit Score:** {candidate.company_fit_score}%")
 
                 tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])
 
                 with tab1:
-                    # Company Fit Score (displayed prominently)
-                    if hasattr(candidate, 'company_fit_score'):
-                        st.markdown("##### Company Values Fit")
-                        score_color = "🟢" if candidate.company_fit_score >= 80 else "🟡" if candidate.company_fit_score >= 60 else "🔴"
-                        st.metric("Cultural & Technical Fit", f"{candidate.company_fit_score}%", delta=None)
                     
                     if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
                         st.markdown("##### AI Assessment")
