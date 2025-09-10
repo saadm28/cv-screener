@@ -123,10 +123,14 @@ st.markdown(f"""
     /* Import Google Fonts */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     
-    /* Global Styles */
-    * {{
-        font-family: 'Inter', sans-serif !important;
+    /* Global Typography (avoid overriding icon fonts) */
+    html, body, p, h1, h2, h3, h4, h5, h6, span, div, li, a, button, input, textarea {{
+        font-family: 'Inter', sans-serif;
     }}
+    /* Preserve any icon / material glyph fonts */
+    .material-icons, .material-icons-outlined, [class*="keyboard_double_arrow"], [data-testid="collapsedControl"] span { 
+        font-family: 'Material Icons' !important; 
+    }
     
     /* Hide Streamlit elements */
     #MainMenu {{visibility: hidden;}}
