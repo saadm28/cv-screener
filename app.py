@@ -452,20 +452,6 @@ if page == "Home":
             <p>Receive ranked candidate lists with detailed analysis, skills matching, and assessment notes.</p>
         </div>
         """, unsafe_allow_html=True)
-    
-    # Call to action
-    st.markdown("""
-    <div style="text-align: center; margin: 4rem 0;">
-        <p style="font-size: 1.1rem; margin-bottom: 2rem;">Ready to transform your hiring process?</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Start CV Analysis", type="primary"):
-            st.session_state.page = "CV Analyzer"
-            st.rerun()
-
 # CV Analyzer Page
 elif page == "CV Analyzer":
     st.markdown(f"""
