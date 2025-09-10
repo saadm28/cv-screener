@@ -28,6 +28,9 @@ class CVAnalysis:
     experience_highlights: List[str]
     strengths: List[str]
     confidence_notes: str
+    company_fit_score: int
+    company_fit_analysis: str
+    ai_reasoning: str
 
 def to_dict(analysis: CVAnalysis) -> dict:
     """Convert CVAnalysis to dictionary"""
@@ -43,6 +46,9 @@ def to_dict(analysis: CVAnalysis) -> dict:
         "experience_highlights": analysis.experience_highlights,
         "strengths": analysis.strengths,
         "confidence_notes": analysis.confidence_notes,
+        "company_fit_score": analysis.company_fit_score,
+        "company_fit_analysis": analysis.company_fit_analysis,
+        "ai_reasoning": analysis.ai_reasoning,
     }
 
 def analyze_cv_with_openai(cv_text: str, filename: str, job_context: Dict[str, Any]) -> CVAnalysis:
@@ -63,11 +69,31 @@ def analyze_cv_with_openai(cv_text: str, filename: str, job_context: Dict[str, A
         
         # Enhanced prompt for comprehensive analysis
         prompt = f"""
-You are an expert HR analyst and recruiter. Analyze the following CV against the provided job requirements and provide detailed insights.
+You are an expert HR analyst and recruiter. Analyze the following CV against the provided job requirements and KSEYE company profile. Provide detailed insights with separate scoring for job match vs company cultural fit.
 
 JOB CONTEXT:
 Job Title: {job_context.get('job_title', 'Not specified')}
 Job Description: {job_context.get('job_description', 'Not specified')}
+
+COMPANY PROFILE - KSEYE:
+KSEYE is a specialist UK lender that uses data to improve credit decisioning, pricing, and portfolio risk management. We're expanding our analytics team to build robust, production-grade models that drive measurable business outcomes.
+
+KEY RESPONSIBILITIES:
+- Build, validate, and deploy predictive models (default/PD, pricing response, prepayment, fraud/affordability, churn) for lending and portfolio analytics
+- Explore internal & external datasets; design features for time-series, tabular, and occasional NLP tasks
+- Own the model lifecycle: data prep, training, back-testing, calibration/monitoring, A/B tests, and drift alerts
+- Productionise models with MLOps best practices (versioning, CI/CD, reproducibility) in collaboration with Engineering
+- Create clear, business-friendly outputs (dashboards, documentation, and decision playbooks) for Underwriting, Risk, and Collections
+- Champion data quality and model governance (explainability, fairness, and auditability)
+
+KSEYE CULTURE & VALUES (KEY FOR COMPANY FIT SCORING):
+- Hybrid team with product-lean mindset and short iterations
+- Values clean code, reproducible pipelines, and evidence-based decisions
+- End-to-end ownership: problem framing → data → model → deployment → monitoring → business impact
+- Financial services domain expertise is highly valued
+- Tech stack: Python, SQL, scikit-learn, XGBoost/LightGBM, MLflow, Git, Docker, Airflow, Databricks/Spark, AWS, Power BI/Tableau
+- Model governance and explainability focus (regulatory requirements in lending)
+- Production-first mentality (not just research/POCs)
 
 CV TEXT:
 {cv_text}
@@ -84,8 +110,32 @@ Please provide a comprehensive analysis in the following JSON format:
     "nice_to_have_skills": ["skill1", "skill2", "skill3"],
     "experience_highlights": ["Most relevant experience point 1", "Most relevant experience point 2", "Most relevant experience point 3"],
     "strengths": ["Key strength 1", "Key strength 2", "Key strength 3"],
-    "confidence_notes": "Brief assessment of candidate fit and any concerns or standout qualities"
+    "confidence_notes": "Brief assessment of candidate technical fit and any concerns or standout qualities",
+    "company_fit_score": 75,
+    "company_fit_analysis": "Company fit assessment focusing on culture and working style alignment with KSEYE values",
+    "ai_reasoning": "Comprehensive analysis including technical assessment, relevant experience evaluation, and company fit insights. Mention the company fit score and whether it's strong/moderate/weak fit for KSEYE's culture and working style."
 }}
+
+SCORING GUIDELINES:
+1. Company Fit Score (0-100) should be INDEPENDENT of technical skills and based on:
+   - Financial services/lending domain experience (+20 points)
+   - Production MLOps experience (not just research) (+15 points)  
+   - End-to-end ownership mindset evidence (+15 points)
+   - Clean code/reproducible pipeline experience (+10 points)
+   - Model governance/explainability experience (+10 points)
+   - Hybrid/agile working experience (+10 points)
+   - Evidence-based decision making approach (+10 points)
+   - Regulatory/compliance awareness (+10 points)
+
+2. AI Reasoning should:
+   - Provide technical assessment of skills and experience
+   - Evaluate job requirements match
+   - ALWAYS reference the company fit score prominently (e.g., "With a company values fit score of 65%, this candidate shows moderate alignment with KSEYE's culture..." or "The 85% company values fit score reflects strong cultural alignment...")
+   - Explain briefly why the company fit score is high/moderate/low
+   - Highlight specific strengths and potential concerns
+   - Be comprehensive but concise (3-4 sentences)
+
+3. Other fields should focus on technical/job matching aspects, not company culture
 
 ANALYSIS GUIDELINES:
 1. Extract the candidate's full name from the CV (usually at the top)
@@ -94,8 +144,8 @@ ANALYSIS GUIDELINES:
 4. Identify skills that directly match job requirements as "must_have_skills"
 5. Include complementary skills as "nice_to_have_skills"
 6. Highlight the most impressive and relevant experience points
-7. Provide an honest assessment of candidate fit
-8. Be concise but informative
+7. Company fit score should reflect cultural/working style alignment, NOT technical skills
+8. Be honest and differentiate candidates - don't give everyone the same scores
 9. Ensure all fields are properly filled
 
 Return only the JSON object, no additional text.
@@ -141,7 +191,10 @@ Return only the JSON object, no additional text.
             nice_to_have_skills=safe_list(analysis_data.get('nice_to_have_skills', [])),
             experience_highlights=safe_list(analysis_data.get('experience_highlights', [])),
             strengths=safe_list(analysis_data.get('strengths', [])),
-            confidence_notes=safe_get(analysis_data, 'confidence_notes', 'No assessment notes')
+            confidence_notes=safe_get(analysis_data, 'confidence_notes', 'No assessment notes'),
+            company_fit_score=int(analysis_data.get('company_fit_score', 50)),
+            company_fit_analysis=safe_get(analysis_data, 'company_fit_analysis', 'No company fit analysis available'),
+            ai_reasoning=safe_get(analysis_data, 'ai_reasoning', 'No AI reasoning available')
         )
         print(f"✅ Analysis completed for {filename} -> Candidate: {result.candidate_name}")
         return result
@@ -198,7 +251,10 @@ def fallback_analysis(cv_text: str, filename: str, job_context: Dict[str, Any]) 
         nice_to_have_skills=found_skills[5:10] if len(found_skills) > 5 else [],
         experience_highlights=["Basic analysis only - full details require OpenAI"],
         strengths=["Analysis requires OpenAI API key"],
-        confidence_notes="Limited analysis - please configure OpenAI API key for comprehensive evaluation"
+        confidence_notes="Limited analysis - please configure OpenAI API key for comprehensive evaluation",
+        company_fit_score=50,
+        company_fit_analysis="Company fit analysis requires OpenAI API key for comprehensive evaluation",
+        ai_reasoning="Basic fallback analysis - OpenAI API key required for comprehensive AI assessment and company fit evaluation"
     )
     print(f"✅ Fallback analysis completed for {filename} -> Candidate: {candidate_name}")
     return result

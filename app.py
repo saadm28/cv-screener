@@ -1,4 +1,5 @@
 import os, io, json, zipfile
+import requests
 from pathlib import Path
 
 import streamlit as st
@@ -10,6 +11,99 @@ from utils.text import clean_text
 from cv_analyzer import analyze_cv_with_openai, to_dict, score_candidate_with_ai
 
 load_dotenv()
+
+def get_market_rate(job_title, location):
+    """Fetch market rate data from Adzuna API with detailed debugging"""
+    try:
+        app_id = os.getenv("ADZUNA_APP_ID", "").strip()
+        app_key = os.getenv("ADZUNA_APP_KEY", "").strip()
+        
+        # Debug: Check credentials without exposing them
+        print(f"🔐 Adzuna Debug - Credentials configured: {bool(app_id and app_key and app_id != 'your_adzuna_app_id_here')}")
+        
+        if not app_id or not app_key or app_id == "your_adzuna_app_id_here":
+            print("❌ Adzuna Debug - Credentials not configured properly")
+            return None, "Adzuna API credentials not configured. Please check your .env file."
+        
+        # Clean location for API (extract city name only)
+        location_clean = location.split(",")[0].strip().lower() if location else "london"
+        location_clean = location_clean.replace(" ", "%20")  # URL encode spaces
+        
+        print(f"🌍 Adzuna Debug - Original location: '{location}' -> Cleaned: '{location_clean}'")
+        print(f"💼 Adzuna Debug - Job title: '{job_title}'")
+        
+        # Adzuna API endpoint
+        url = f"https://api.adzuna.com/v1/api/jobs/gb/search/1"
+        params = {
+            "app_id": app_id,
+            "app_key": app_key,
+            "results_per_page": 50,  # Get more results for better average
+            "what": job_title,
+            "where": location_clean,
+            # Remove salary sorting to get representative sample
+            # "sort_by": "salary"  # Removed to avoid high-end bias
+            "what_exclude": "director,vice president,vp,chief,head of,ceo,cto,cmo,senior director",  # Exclude executive roles
+            "salary_min": 25000,  # Set reasonable salary bounds
+            "salary_max": 150000
+        }
+        
+        print(f"🔗 Adzuna Debug - API URL: {url}")
+        print(f"📊 Adzuna Debug - Parameters: {params}")
+        
+        response = requests.get(url, params=params, timeout=10)
+        print(f"📡 Adzuna Debug - Response status: {response.status_code}")
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        jobs = data.get("results", [])
+        total_jobs = data.get("count", 0)
+        
+        print(f"📈 Adzuna Debug - Total jobs found: {total_jobs}, Jobs with salary data: {len(jobs)}")
+        
+        if not jobs:
+            print("❌ Adzuna Debug - No jobs returned from API")
+            return None, f"No salary data found for '{job_title}' in '{location}'"
+        
+        # Extract salary information with debugging
+        salaries = []
+        salary_count = 0
+        for i, job in enumerate(jobs):
+            if job.get("salary_min") and job.get("salary_max"):
+                avg_salary = (job["salary_min"] + job["salary_max"]) / 2
+                salaries.append(avg_salary)
+                salary_count += 1
+                if i < 3:  # Debug first 3 jobs
+                    print(f"💰 Adzuna Debug - Job {i+1}: {job.get('title', 'N/A')} - £{job.get('salary_min', 0):,} to £{job.get('salary_max', 0):,} (avg: £{avg_salary:,.0f})")
+        
+        print(f"💵 Adzuna Debug - Jobs with salary data: {salary_count}/{len(jobs)}")
+        
+        if not salaries:
+            print("❌ Adzuna Debug - No salary information in job results")
+            return None, f"No salary information available for '{job_title}' in '{location}'"
+        
+        # Calculate statistics
+        min_salary = min(salaries)
+        max_salary = max(salaries)
+        avg_salary = sum(salaries) / len(salaries)
+        
+        result = {
+            "min": min_salary,
+            "max": max_salary, 
+            "average": avg_salary,
+            "count": len(salaries)
+        }
+        
+        print(f"✅ Adzuna Debug - Final result: Min £{min_salary:,.0f}, Max £{max_salary:,.0f}, Avg £{avg_salary:,.0f}, Count: {len(salaries)}")
+        
+        return result, None
+        
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Adzuna Debug - Request error: {str(e)}")
+        return None, f"API request failed: {str(e)}"
+    except Exception as e:
+        print(f"❌ Adzuna Debug - Unexpected error: {str(e)}")
+        return None, f"Error fetching market rate: {str(e)}"
 
 st.set_page_config(
     page_title="KSEYE CV Screener", 
@@ -405,87 +499,123 @@ elif page == "CV Analyzer":
                 "candidate_obj": candidate,
             })
 
-        st.subheader("Candidate Rankings")
-        st.caption("Click View details to see full analysis below")
+        # Market Rate Section (if location and job title provided)
+        if job_title and location:
+            st.markdown("### Market Rate Analysis")
+            with st.spinner("Fetching market rate data..."):
+                market_data, error = get_market_rate(job_title, location)
+                
+                if market_data:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("Average Salary", f"£{market_data['average']:,.0f}")
+                    with col2:
+                        st.metric("Min Salary", f"£{market_data['min']:,.0f}")
+                    with col3:
+                        st.metric("Max Salary", f"£{market_data['max']:,.0f}")
+                    with col4:
+                        st.metric("Sample Size", f"{market_data['count']} jobs")
+                    
+                elif error:
+                    st.warning(f"⚠️ Could not fetch market rate data: {error}")
+            
+            st.markdown("---")
 
-        # Table header
-        h1, h2, h3, h4, h5 = st.columns([0.8, 3, 1, 6, 1.4])
+        st.subheader("Candidate Rankings")
+
+        # Table header (no Action column)
+        h1, h2, h3, h4 = st.columns([0.8, 3, 1, 7.2])
         with h1: st.markdown("**Rank**")
         with h2: st.markdown("**Name**")
         with h3: st.markdown("**Score**")
         with h4: st.markdown("**Summary**")
-        with h5: st.markdown("**Action**")
 
-        # Table rows with a View button per row
+        # Table rows (no truncation needed now)
         for idx, row in enumerate(candidate_data):
-            summary = row["summary"]
-            summary = (summary[:120] + "...") if isinstance(summary, str) and len(summary) > 120 else summary
-            c1, c2, c3, c4, c5 = st.columns([0.8, 3, 1, 6, 1.4])
+            c1, c2, c3, c4 = st.columns([0.8, 3, 1, 7.2])
             c1.write(row["rank"]) 
             c2.write(row["name"]) 
             c3.write(f"{row['score']:.0f}%") 
-            c4.write(summary)
-            if c5.button("View details", key=f"view_{idx}"):
-                st.session_state["selected_candidate_idx"] = idx
-                st.rerun()
+            c4.write(row["summary"])  # Full summary without truncation
 
-        selected_idx = st.session_state.get("selected_candidate_idx")
+        # Detailed Candidate Analysis Section
+        st.markdown("### Detailed Candidate Analysis")
+        
+        if candidate_data:
+            # Create dropdown options with name and score
+            candidate_options = ["Select a candidate..."] + [
+                f"{row['name']} ({row['score']:.0f}%)" for row in candidate_data
+            ]
+            
+            selected_option = st.selectbox(
+                "Choose candidate for detailed analysis:",
+                candidate_options,
+                key="candidate_selector"
+            )
+            
+            if selected_option != "Select a candidate...":
+                # Find the selected candidate index
+                selected_idx = candidate_options.index(selected_option) - 1
+                chosen = candidate_data[selected_idx]
+                candidate = chosen["candidate_obj"]
+                score = chosen["score"]
 
-        # Details panel
-        if selected_idx is not None and 0 <= selected_idx < len(candidate_data):
-            chosen = candidate_data[selected_idx]
-            candidate = chosen["candidate_obj"]
-            score = chosen["score"]
+                # Display candidate details
+                st.markdown(f"#### {candidate.candidate_name}")
+                st.caption(getattr(candidate, 'current_title', 'Professional'))
+                st.write(f"**Match score:** {score:.0f}%")
 
-            # Simple header and tabs (no extra CSS)
-            st.markdown(f"### {candidate.candidate_name}")
-            st.caption(getattr(candidate, 'current_title', 'Professional'))
-            st.write(f"Match score: {score:.0f}%")
+                tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills & Education"])
 
-            tab1, tab2, tab3 = st.tabs(["Analysis", "Experience", "Skills"])
+                with tab1:
+                    # Company Fit Score (displayed prominently)
+                    if hasattr(candidate, 'company_fit_score'):
+                        st.markdown("##### Company Values Fit")
+                        score_color = "🟢" if candidate.company_fit_score >= 80 else "🟡" if candidate.company_fit_score >= 60 else "🔴"
+                        st.metric("Cultural & Technical Fit", f"{candidate.company_fit_score}%", delta=None)
+                    
+                    if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
+                        st.markdown("##### AI Assessment")
+                        st.write(candidate.ai_reasoning)
+                    
+                    if hasattr(candidate, 'summary') and candidate.summary:
+                        st.markdown("##### Professional Summary")
+                        st.write(candidate.summary)
+                    if hasattr(candidate, 'strengths') and candidate.strengths:
+                        st.markdown("##### Key Strengths")
+                        for s in candidate.strengths:
+                            st.markdown(f"• {s}")
 
-            with tab1:
-                if hasattr(candidate, 'ai_reasoning') and candidate.ai_reasoning:
-                    st.markdown("#### AI Assessment")
-                    st.write(candidate.ai_reasoning)
-                if hasattr(candidate, 'summary') and candidate.summary:
-                    st.markdown("#### Professional Summary")
-                    st.write(candidate.summary)
-                if hasattr(candidate, 'strengths') and candidate.strengths:
-                    st.markdown("#### Key Strengths")
-                    for s in candidate.strengths:
-                        st.markdown(f"- {s}")
+                with tab2:
+                    if hasattr(candidate, 'experience_highlights') and candidate.experience_highlights:
+                        st.markdown("##### Experience Highlights")
+                        for i, h in enumerate(candidate.experience_highlights):
+                            st.markdown(f"• {h}")
+                    else:
+                        st.info("No detailed experience highlights available.")
 
-            with tab2:
-                if hasattr(candidate, 'experience_highlights') and candidate.experience_highlights:
-                    st.markdown("#### Experience Highlights")
-                    for i, h in enumerate(candidate.experience_highlights):
-                        st.markdown(f"- {h}")
-                else:
-                    st.info("No detailed experience highlights available.")
-
-            with tab3:
-                col1, col2 = st.columns(2)
-                with col1:
-                    if hasattr(candidate, 'must_have_skills') and candidate.must_have_skills:
-                        st.markdown("#### Must-Have Skills")
-                        for sk in candidate.must_have_skills:
-                            st.markdown(f"- {sk}")
-                with col2:
-                    if hasattr(candidate, 'nice_to_have_skills') and candidate.nice_to_have_skills:
-                        st.markdown("#### Nice-to-Have Skills")
-                        for sk in candidate.nice_to_have_skills:
-                            st.markdown(f"- {sk}")
-                if hasattr(candidate, 'education') and candidate.education:
-                    st.markdown("#### Education Background")
-                    for edu in candidate.education:
-                        degree = edu.get('degree', 'N/A')
-                        institution = edu.get('institution', 'N/A')
-                        year = edu.get('year', 'N/A')
-                        st.markdown(f"- {degree} — {institution} ({year})")
-
+                with tab3:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if hasattr(candidate, 'must_have_skills') and candidate.must_have_skills:
+                            st.markdown("##### Required Skills Found")
+                            for sk in candidate.must_have_skills:
+                                st.markdown(f"✅ {sk}")
+                    with col2:
+                        if hasattr(candidate, 'nice_to_have_skills') and candidate.nice_to_have_skills:
+                            st.markdown("##### Additional Skills")
+                            for sk in candidate.nice_to_have_skills:
+                                st.markdown(f"➕ {sk}")
+                    
+                    if hasattr(candidate, 'education') and candidate.education:
+                        st.markdown("##### Education Background")
+                        for edu in candidate.education:
+                            degree = edu.get('degree', 'N/A')
+                            institution = edu.get('institution', 'N/A')
+                            year = edu.get('year', 'N/A')
+                            st.markdown(f"🎓 **{degree}** — {institution} ({year})")
         else:
-            st.info("Use the selector above to choose a candidate and view details.")
+            st.info("No candidates to analyze. Please run an analysis first.")
 
         st.markdown("<div style='margin-bottom: 60px;'></div>", unsafe_allow_html=True)
 
@@ -494,6 +624,7 @@ elif page == "CV Analyzer":
         st.markdown("### Job Details")
 
         job_title = st.text_input("Job Title", placeholder="e.g., Senior Python Developer")
+        location = st.text_input("City", placeholder="e.g., London, Manchester, Birmingham", help="City for UK market rate analysis (powered by Adzuna)")
         job_description = st.text_area(
             "Job Description",
             height=200,
