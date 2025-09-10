@@ -145,6 +145,18 @@ st.markdown(f"""
         border-right: 2px solid {KSEYE_LIGHT};
     }}
     
+    /* Hide sidebar collapse button to prevent accidental closing */
+    button[data-testid="collapsedControl"],
+    .css-1kyxreq {{
+        display: none !important;
+    }}
+    
+    /* Ensure sidebar stays visible */
+    section[data-testid="stSidebar"] {{
+        min-width: 300px !important;
+        width: 300px !important;
+    }}
+    
     /* KSEYE Header */
     .kseye-header {{
         background: white;
@@ -357,11 +369,10 @@ if "page" not in st.session_state:
     st.session_state.page = "Home"
 
 page = st.sidebar.selectbox(
-    "Navigation",
+    "Navigate to:",
     ["Home", "CV Analyzer"],
     index=["Home", "CV Analyzer"].index(st.session_state.page),
     format_func=lambda x: x,
-    label_visibility="hidden",
     key="page_selector"
 )
 
