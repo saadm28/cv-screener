@@ -147,7 +147,25 @@ st.markdown(f"""
     
     /* Hide sidebar collapse button to prevent accidental closing */
     button[data-testid="collapsedControl"],
-    .css-1kyxreq {{
+    .css-1kyxreq,
+    button[kind="header"],
+    .css-1rs6os.edgvbvh3,
+    .css-17lntkn.e1g8pov61,
+    button[aria-label*="Close"],
+    button[aria-label*="Hide"],
+    .stSidebar button[aria-expanded],
+    .css-1544g2n.e1fqkh3o4,
+    .css-k1vhr4.e1g8pov61,
+    [data-testid="stSidebar"] button:not([data-testid]),
+    .css-1d391kg button {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Hide any text that might be a collapse indicator */
+    .css-1d391kg .css-k1vhr4,
+    .css-1d391kg .css-1544g2n,
+    section[data-testid="stSidebar"] .css-k1vhr4 {{
         display: none !important;
     }}
     
@@ -155,6 +173,17 @@ st.markdown(f"""
     section[data-testid="stSidebar"] {{
         min-width: 300px !important;
         width: 300px !important;
+    }}
+    
+    /* Force sidebar to always be expanded and prevent collapse */
+    .css-1d391kg {{
+        transform: translateX(0px) !important;
+        visibility: visible !important;
+    }}
+    
+    /* Override any collapse animations or transforms */
+    section[data-testid="stSidebar"] > div {{
+        transform: translateX(0px) !important;
     }}
     
     /* KSEYE Header */
