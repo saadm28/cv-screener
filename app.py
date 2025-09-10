@@ -279,9 +279,11 @@ st.markdown(f"""
         border-radius: 8px;
         font-weight: 600;
         font-size: 16px;
-        width: 100%;
-        margin-top: 16px;
-        transition: all 0.3s ease;
+            width: auto !important;
+            margin-top: 16px;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            display: block !important;
     }}
     
     .stButton > button:hover {{
