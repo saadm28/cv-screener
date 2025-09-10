@@ -145,46 +145,25 @@ st.markdown(f"""
         border-right: 2px solid {KSEYE_LIGHT};
     }}
     
-    /* Hide sidebar collapse button to prevent accidental closing */
-    button[data-testid="collapsedControl"],
-    .css-1kyxreq,
-    button[kind="header"],
-    .css-1rs6os.edgvbvh3,
-    .css-17lntkn.e1g8pov61,
-    button[aria-label*="Close"],
-    button[aria-label*="Hide"],
-    .stSidebar button[aria-expanded],
-    .css-1544g2n.e1fqkh3o4,
-    .css-k1vhr4.e1g8pov61,
-    [data-testid="stSidebar"] button:not([data-testid]),
-    .css-1d391kg button {{
-        display: none !important;
-        visibility: hidden !important;
-    }}
-    
-    /* Hide any text that might be a collapse indicator */
-    .css-1d391kg .css-k1vhr4,
-    .css-1d391kg .css-1544g2n,
-    section[data-testid="stSidebar"] .css-k1vhr4 {{
-        display: none !important;
-    }}
-    
-    /* Ensure sidebar stays visible */
+    /* Sidebar behavior: keep visible but don't nuke structure */
     section[data-testid="stSidebar"] {{
         min-width: 300px !important;
         width: 300px !important;
+        box-shadow: 2px 0 4px rgba(0,0,0,0.04);
     }}
-    
-    /* Force sidebar to always be expanded and prevent collapse */
-    .css-1d391kg {{
-        transform: translateX(0px) !important;
+    /* If Streamlit applies a collapsed transform, override it */
+    section[data-testid="stSidebar"][aria-expanded="false"],
+    section[data-testid="stSidebar"] > div[style*="translateX(-"] {{
+        transform: translateX(0) !important;
         visibility: visible !important;
+        opacity: 1 !important;
     }}
-    
-    /* Override any collapse animations or transforms */
-    section[data-testid="stSidebar"] > div {{
-        transform: translateX(0px) !important;
+    /* Collapse control: disable interaction but keep layout stable */
+    button[data-testid="collapsedControl"] {{
+        pointer-events: none;
+        opacity: 0;
     }}
+    button[data-testid="collapsedControl"]:focus {{ outline: none; }}
     
     /* KSEYE Header */
     .kseye-header {{
