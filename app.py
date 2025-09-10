@@ -382,23 +382,19 @@ st.sidebar.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Page selection (robust state binding)
+# Page selection (single source of truth to avoid double-select flicker)
 PAGES = ["Home", "CV Analyzer"]
-if "page" not in st.session_state:
-    st.session_state.page = "Home"
+if "page_select" not in st.session_state:
+    st.session_state.page_select = "Home"
 
 st.sidebar.selectbox(
     "Navigate to:",
     PAGES,
-    key="page_selector",
-    index=PAGES.index(st.session_state.page) if st.session_state.page in PAGES else 0,
+    key="page_select",
 )
 
-# Reflect current selectbox value back into canonical page state
-selected_page = st.session_state.get("page_selector", "Home")
-if selected_page != st.session_state.page:
-    st.session_state.page = selected_page
-
+# Backward compatibility: mirror to st.session_state.page
+st.session_state.page = st.session_state.page_select
 page = st.session_state.page
 
 # Home Page
